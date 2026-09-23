@@ -48,7 +48,7 @@ export function spendInMonth(
   return { total, byCategory }
 }
 
-function recurringForMonth(
+export function recurringForMonth(
   data: AppData,
   key: string,
   filter?: { paymentMethod?: Expense['paymentMethod']; actualOnly?: boolean },

@@ -56,8 +56,27 @@ export type StickyNote = {
   updatedAt: string
 }
 
+export type MoneyIn = {
+  id: string
+  amount: number
+  date: string
+  note: string
+  source: string
+}
+
+export type PassbookLine = {
+  id: string
+  date: string
+  title: string
+  flow: 'in' | 'out'
+  amount: number
+  balanceAfter: number
+  detail?: string
+}
+
 export type AppData = {
   expenses: Expense[]
+  moneyIns: MoneyIn[]
   fixedOutgoings: FixedOutgoing[]
   stickyNotes: StickyNote[]
   settings: AppSettings

@@ -5,6 +5,7 @@ import { useToday } from './hooks/useToday'
 import { isSessionUnlocked } from './lib/auth'
 import { formatFullDate, formatMonthYear } from './lib/dates'
 import { currentMonthSummary } from './lib/forecast'
+import { categorySpendForMonth, moneyInForMonth } from './lib/ledger'
 import { formatMoney } from './lib/format'
 import { loadAppData, saveAppData } from './lib/storage'
 import { CATEGORIES } from './types'
@@ -13,21 +14,40 @@ import {
   AddExpensePage,
   type AddExpenseDefaults,
 } from './pages/AddExpensePage'
+import { CalendarPage } from './pages/CalendarPage'
 import { CreditPage } from './pages/CreditPage'
 import { DataPage } from './pages/DataPage'
+import { ManualPage } from './pages/ManualPage'
+import { MonthReportPage } from './pages/MonthReportPage'
 import { NotesPage } from './pages/NotesPage'
 import { OutgoingsPage } from './pages/OutgoingsPage'
 import { PlanPage } from './pages/PlanPage'
+import { WalletPage } from './pages/WalletPage'
 
-type Tab = 'home' | 'add' | 'outgoings' | 'plan' | 'credit' | 'notes' | 'data'
+type Tab =
+  | 'home'
+  | 'add'
+  | 'wallet'
+  | 'report'
+  | 'calendar'
+  | 'outgoings'
+  | 'plan'
+  | 'credit'
+  | 'notes'
+  | 'manual'
+  | 'data'
 
 const TAB_HINTS: Record<Tab, string> = {
   home: 'Summary for the current calendar month on your device.',
-  add: 'Record money you already spent, or plan a future payment.',
+  add: 'PAY ▷ — record a bill or purchase you already made.',
+  wallet: 'ADD ◈ — money you received (salary, gift, etc.).',
+  report: 'Pick a month: categories, passbook, download CSV/JSON/PDF.',
+  calendar: 'Tap a day to view or add entries for that date.',
   outgoings: 'Fixed bills and charts for every month you track.',
   plan: 'See planned costs for this month, next month, and ahead.',
   credit: 'Only credit card spending — separate from cash/UPI.',
   notes: 'Free-form sticky notes (not counted as expenses).',
+  manual: 'Full user guide for every tab.',
   data: 'Backup, income, and where data is stored.',
 }
 
@@ -36,6 +56,7 @@ function App() {
   const [data, setData] = useState<AppData>(() => loadAppData())
   const [tab, setTab] = useState<Tab>('home')
   const [addDefaults, setAddDefaults] = useState<AddExpenseDefaults>({})
+  const [walletDate, setWalletDate] = useState<string | undefined>()
 
   const now = useToday()
 
@@ -44,6 +65,14 @@ function App() {
   }, [data])
 
   const summary = useMemo(() => currentMonthSummary(data, now), [data, now])
+  const monthAdded = useMemo(
+    () => moneyInForMonth(data, summary.monthKey),
+    [data, summary.monthKey],
+  )
+  const homeByCategory = useMemo(
+    () => categorySpendForMonth(data, summary.monthKey).byCategory,
+    [data, summary.monthKey],
+  )
   const recent = data.expenses.filter((e) => e.kind === 'actual').slice(0, 8)
   const { currency } = data.settings
 
@@ -66,15 +95,26 @@ function App() {
     setTab('add')
   }
 
+  function openWallet(date?: string) {
+    setWalletDate(date)
+    setTab('wallet')
+  }
+
   const titles: Record<Tab, string> = {
     home: formatMonthYear(now),
-    add: 'Add spending or plan',
+    add: 'Record payment (PAY ▷)',
+    wallet: 'Add money (ADD ◈)',
+    report: 'Month report',
+    calendar: 'Calendar',
     outgoings: 'Monthly bills & history',
     plan: 'Plan ahead',
     credit: 'Credit card',
     notes: 'Sticky notes',
+    manual: 'User manual',
     data: 'Settings & backup',
   }
+
+  const addFormKey = `${addDefaults.date ?? ''}-${addDefaults.kind ?? ''}-${addDefaults.paymentMethod ?? ''}`
 
   return (
     <PinGate unlocked={unlocked} onUnlockedChange={setUnlocked}>
@@ -93,60 +133,47 @@ function App() {
             <div className="space-y-4">
               <HelpBox title="Quick guide">
                 <p>
-                  <strong>1.</strong> Tap <strong>Spend</strong> when you pay for
-                  something.
+                  <strong>ADD ◈</strong> = Wallet tab · <strong>PAY ▷</strong> =
+                  Spend tab · <strong>Report</strong> = any month + download.
                 </p>
-                <p>
-                  <strong>2.</strong> Use <strong>Plan</strong> for costs you
-                  expect this or next month.
-                </p>
-                <p>
-                  <strong>3.</strong> Card purchases go under{' '}
-                  <strong>Credit</strong>.
-                </p>
-                <p>
-                  Month name above changes automatically with today&apos;s date.
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setTab('manual')}
+                  className="mt-2 text-sm font-semibold text-sky-800 underline"
+                >
+                  Open full user manual
+                </button>
               </HelpBox>
 
               <section className="rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white shadow-lg">
                 <p className="text-sm text-emerald-100">
-                  Total spent in {formatMonthYear(now)} (real payments)
+                  {formatMonthYear(now)} — real payments (PAY ▷)
                 </p>
                 <p className="mt-1 text-3xl font-bold">
                   {formatMoney(currency, summary.spent)}
                 </p>
                 <p className="mt-2 text-sm text-emerald-100">
-                  Cash / UPI: {formatMoney(currency, summary.cash)} · Credit
-                  card: {formatMoney(currency, summary.credit)}
+                  ADD ◈ this month: {formatMoney(currency, monthAdded)} · Cash:{' '}
+                  {formatMoney(currency, summary.cash)} · Card:{' '}
+                  {formatMoney(currency, summary.credit)}
                 </p>
-                {summary.planned > 0 && (
-                  <p className="mt-2 text-sm text-amber-100">
-                    Still only planned (not paid):{' '}
-                    {formatMoney(currency, summary.planned)}
-                  </p>
-                )}
-                {summary.income > 0 && summary.remaining !== null && (
-                  <p className="mt-2 text-sm text-emerald-100">
-                    Money left after income:{' '}
-                    <span className="font-semibold text-white">
-                      {formatMoney(currency, Math.max(0, summary.remaining))}
-                    </span>
-                  </p>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setTab('report')}
+                  className="mt-3 rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium"
+                >
+                  Other months → Report
+                </button>
               </section>
 
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h2 className="text-sm font-semibold">Spending by category</h2>
                 <ul className="mt-3 space-y-2">
                   {CATEGORIES.map((cat) => {
-                    const spent = summary.byCategory[cat]
+                    const spent = homeByCategory[cat]
                     if (spent === 0) return null
                     return (
-                      <li
-                        key={cat}
-                        className="flex justify-between text-sm"
-                      >
+                      <li key={cat} className="flex justify-between text-sm">
                         <span className="text-slate-600">{cat}</span>
                         <span className="font-medium">
                           {formatMoney(currency, spent)}
@@ -165,12 +192,12 @@ function App() {
                     onClick={() => openAdd()}
                     className="text-sm font-medium text-emerald-700"
                   >
-                    + Add
+                    PAY ▷
                   </button>
                 </div>
                 {recent.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-500">
-                    No payments logged yet. Tap Spend below to add one.
+                    No payments yet.
                   </p>
                 ) : (
                   <ul className="mt-3 divide-y divide-slate-100">
@@ -205,11 +232,32 @@ function App() {
 
           {tab === 'add' && (
             <AddExpensePage
+              key={addFormKey}
               data={data}
               now={now}
               defaults={addDefaults}
               setData={setData}
               onSaved={() => setTab('home')}
+            />
+          )}
+
+          {tab === 'wallet' && (
+            <WalletPage
+              data={data}
+              now={now}
+              setData={setData}
+              initialDate={walletDate}
+            />
+          )}
+
+          {tab === 'report' && <MonthReportPage data={data} now={now} />}
+
+          {tab === 'calendar' && (
+            <CalendarPage
+              data={data}
+              now={now}
+              onAddForDate={(d) => openAdd({ date: d, kind: 'actual' })}
+              onAddMoneyForDate={(d) => openWallet(d)}
             />
           )}
 
@@ -239,6 +287,8 @@ function App() {
 
           {tab === 'notes' && <NotesPage data={data} setData={setData} />}
 
+          {tab === 'manual' && <ManualPage />}
+
           {tab === 'data' && (
             <DataPage
               data={data}
@@ -257,19 +307,23 @@ function App() {
             {(
               [
                 ['home', 'Today'],
+                ['wallet', 'Wallet'],
                 ['add', 'Spend'],
-                ['outgoings', 'Bills'],
+                ['report', 'Report'],
+                ['calendar', 'Cal'],
+                ['credit', 'Card'],
                 ['plan', 'Plan'],
-                ['credit', 'Credit'],
+                ['outgoings', 'Bills'],
                 ['notes', 'Notes'],
-                ['data', 'Settings'],
+                ['manual', 'Help'],
+                ['data', 'Set'],
               ] as const
             ).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setTab(id)}
-                className={`min-w-[3.25rem] shrink-0 rounded-lg px-1.5 py-2 text-[10px] font-medium leading-tight ${
+                className={`min-w-[3rem] shrink-0 rounded-lg px-1 py-2 text-[10px] font-medium leading-tight ${
                   tab === id
                     ? 'bg-emerald-50 text-emerald-800'
                     : 'text-slate-500'

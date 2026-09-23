@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { FlowBadge } from '../components/FlowBadge'
 import { todayISO } from '../lib/dates'
 import { resolvePlanDate } from '../lib/planDates'
 import { newId } from '../lib/format'
@@ -17,6 +18,7 @@ import {
 export type AddExpenseDefaults = {
   kind?: ExpenseKind
   paymentMethod?: PaymentMethod
+  date?: string
 }
 
 type Props = {
@@ -35,7 +37,7 @@ export function AddExpensePage({
 }: Props) {
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState<Category>('Food')
-  const [date, setDate] = useState(() => todayISO(now))
+  const [date, setDate] = useState(() => defaults.date ?? todayISO(now))
   const [note, setNote] = useState('')
   const [recurrence, setRecurrence] = useState<Recurrence>('once')
   const [kind, setKind] = useState<ExpenseKind>(defaults.kind ?? 'actual')
@@ -45,6 +47,12 @@ export function AddExpensePage({
   const [planMonth, setPlanMonth] = useState<PlanMonth>(
     defaults.kind === 'planned' ? 'this' : 'pick',
   )
+
+  useEffect(() => {
+    if (defaults.date) setDate(defaults.date)
+    if (defaults.kind) setKind(defaults.kind)
+    if (defaults.paymentMethod) setPaymentMethod(defaults.paymentMethod)
+  }, [defaults.date, defaults.kind, defaults.paymentMethod])
 
   function save() {
     const value = Number(amount)
@@ -76,9 +84,12 @@ export function AddExpensePage({
         </p>
       </HelpBox>
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">
-        {kind === 'planned' ? 'Plan a future cost' : 'Record a payment'}
-      </h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-lg font-semibold">
+          {kind === 'planned' ? 'Plan a future cost' : 'Record a payment'}
+        </h2>
+        {kind === 'actual' && <FlowBadge flow="out" />}
+      </div>
 
       <div className="flex gap-2">
         {(['actual', 'planned'] as const).map((k) => (

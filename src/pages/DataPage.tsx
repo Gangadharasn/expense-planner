@@ -34,8 +34,8 @@ export function DataPage({ data, setData, updateSettings, onLock }: Props) {
           another device will not see your entries — use backup below.
         </p>
         <p className="mt-2 text-xs text-amber-900/70">
-          {data.expenses.length} expenses · {data.fixedOutgoings.length} fixed
-          bills · {data.stickyNotes.length} notes
+          {data.expenses.length} expenses · {data.moneyIns.length} wallet
+          entries · {data.stickyNotes.length} notes
         </p>
       </section>
 
